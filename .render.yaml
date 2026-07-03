@@ -1,0 +1,13 @@
+services:
+  - type: web
+    name: slapet-bot
+    env: node
+    plan: free
+    branch: main
+    buildCommand: npm install
+    startCommand: npm start
+    env:
+      - key: NODE_ENV
+        value: production
+      - key: PAIRING_CODE
+        value: 'true'
