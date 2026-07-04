@@ -89,7 +89,7 @@ app.get('/code', async (req, res) => {
         })
         if (!number) return res.status(400).json({ error: 'Missing or invalid number' })
         if (!pairingSocket) return res.status(503).json({ error: 'Bot is not ready yet' })
-        if (pairingConnectionState !== 'open') return res.status(503).json({ error: `Bot connection is not open yet. Status: ${pairingConnectionState}` })
+        if (pairingConnectionState === 'closed' || pairingConnectionState === 'unknown') return res.status(503).json({ error: `Bot connection is not ready. Status: ${pairingConnectionState}` })
         if (pairingSocket.authState?.creds?.registered) return res.status(400).json({ error: 'Bot is already registered' })
 
         const host = req.headers.host || ''
@@ -327,8 +327,10 @@ async function startXeonBotInc() {
 pairingSocket = XeonBotInc
         XeonBotInc.ev.on('connection.update', async (s) => {
         const { connection, lastDisconnect, qr } = s
+        console.log(chalk.blue('connection.update event:'), JSON.stringify(s, null, 2))
         
         if (qr) {
+            pairingConnectionState = 'qr'
             console.log(chalk.yellow('📱 QR Code generated. Please scan with WhatsApp.'))
         }
         
