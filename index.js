@@ -86,11 +86,18 @@ app.get('/code', async (req, res) => {
             return res.status(400).json({ error: 'Invalid phone number' })
         }
 
-        const code = await pairingSocket.requestPairingCode(number)
+        const pairingMethod = pairingSocket.requestPairingCode || pairingSocket.queryPairingCode
+        if (typeof pairingMethod !== 'function') {
+            console.error('Pairing code method missing on socket', Object.keys(pairingSocket))
+            return res.status(500).json({ error: 'Pairing method not available on bot socket' })
+        }
+
+        const codeResult = await pairingMethod.call(pairingSocket, number)
+        const code = typeof codeResult === 'string' ? codeResult : codeResult?.code || codeResult?.pairingCode || JSON.stringify(codeResult)
         return res.json({ code })
     } catch (error) {
         console.error('Pairing code API error:', error)
-        return res.status(500).json({ error: 'Failed to generate pairing code' })
+        return res.status(500).json({ error: error?.message || 'Failed to generate pairing code' })
     }
 })
 
