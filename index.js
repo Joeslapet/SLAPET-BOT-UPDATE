@@ -77,6 +77,7 @@ app.get('/status', (req, res) => {
 app.get('/code', async (req, res) => {
     try {
         const number = (req.query.number || '').replace(/[^0-9]/g, '')
+        console.log('/code request', { number, socketReady: !!pairingSocket, registered: pairingSocket?.authState?.creds?.registered })
         if (!number) return res.status(400).json({ error: 'Missing or invalid number' })
         if (!pairingSocket) return res.status(503).json({ error: 'Bot is not ready yet' })
         if (pairingSocket.authState?.creds?.registered) return res.status(400).json({ error: 'Bot is already registered' })
@@ -94,6 +95,7 @@ app.get('/code', async (req, res) => {
 
         const codeResult = await pairingMethod.call(pairingSocket, number)
         const code = typeof codeResult === 'string' ? codeResult : codeResult?.code || codeResult?.pairingCode || JSON.stringify(codeResult)
+        console.log('/code result', { code })
         return res.json({ code })
     } catch (error) {
         console.error('Pairing code API error:', error)
