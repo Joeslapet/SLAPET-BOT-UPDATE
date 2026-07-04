@@ -72,7 +72,7 @@ app.get('/', (req, res) => {
 app.get('/status', (req, res) => {
     const registered = pairingSocket?.authState?.creds?.registered || false
     const user = pairingSocket?.user?.id || null
-    res.json({ connected: !!pairingSocket, registered, user })
+    res.json({ connected: !!pairingSocket, registered, user, connectionState: pairingConnectionState })
 })
 
 app.get('/code', async (req, res) => {
