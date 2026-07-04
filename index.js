@@ -77,10 +77,24 @@ app.get('/status', (req, res) => {
 app.get('/code', async (req, res) => {
     try {
         const number = (req.query.number || '').replace(/[^0-9]/g, '')
-        console.log('/code request', { number, socketReady: !!pairingSocket, registered: pairingSocket?.authState?.creds?.registered })
+        const origin = req.headers.origin || req.headers.referer || ''
+        console.log('/code request', {
+            url: req.originalUrl,
+            host: req.headers.host,
+            origin,
+            number,
+            socketReady: !!pairingSocket,
+            registered: pairingSocket?.authState?.creds?.registered
+        })
         if (!number) return res.status(400).json({ error: 'Missing or invalid number' })
         if (!pairingSocket) return res.status(503).json({ error: 'Bot is not ready yet' })
         if (pairingSocket.authState?.creds?.registered) return res.status(400).json({ error: 'Bot is already registered' })
+
+        const host = req.headers.host || ''
+        if (origin && !origin.includes(host) && !origin.includes('localhost')) {
+            console.error('Blocked external /code request from origin', origin)
+            return res.status(403).json({ error: 'External origin not allowed' })
+        }
 
         const pn = new PhoneNumber('+' + number)
         if (!pn.isValid()) {

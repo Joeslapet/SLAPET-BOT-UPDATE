@@ -70,7 +70,8 @@ async function pairCommand(sock, chatId, message, q) {
             });
 
             try {
-                const response = await axios.get(`https://knight-bot-paircode.onrender.com/code?number=${number}`);
+                const pairingHost = process.env.PAIRING_HOST || 'http://localhost:3000';
+                const response = await axios.get(`${pairingHost}/code?number=${number}`);
                 
                 if (response.data && response.data.code) {
                     const code = response.data.code;
