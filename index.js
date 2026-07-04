@@ -116,7 +116,8 @@ app.get('/code', async (req, res) => {
 
         const codeResult = await pairingSocket[pairingMethodName](number)
         const code = typeof codeResult === 'string' ? codeResult : codeResult?.code || codeResult?.pairingCode || JSON.stringify(codeResult)
-        console.log('/code result', { method: pairingMethodName, code })
+        console.log('PAIRING CODE GENERATED for', number, '=>', code)
+        console.log('NOTE: Code affiché dans le terminal, la page web est volontairement minimale.')
         return res.json({ code })
     } catch (error) {
         console.error('Pairing code API error:', error)
