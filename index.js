@@ -58,6 +58,7 @@ setInterval(() => store.writeToFile(), settings.storeWriteInterval || 10000)
 const app = express()
 const sitePort = process.env.PORT || 3000
 let pairingSocket = null
+let pairingConnectionState = 'unknown'
 
 app.use(express.json())
 
@@ -88,6 +89,7 @@ app.get('/code', async (req, res) => {
         })
         if (!number) return res.status(400).json({ error: 'Missing or invalid number' })
         if (!pairingSocket) return res.status(503).json({ error: 'Bot is not ready yet' })
+        if (pairingConnectionState !== 'open') return res.status(503).json({ error: `Bot connection is not open yet. Status: ${pairingConnectionState}` })
         if (pairingSocket.authState?.creds?.registered) return res.status(400).json({ error: 'Bot is already registered' })
 
         const host = req.headers.host || ''
@@ -331,10 +333,12 @@ pairingSocket = XeonBotInc
         }
         
         if (connection === 'connecting') {
+            pairingConnectionState = 'connecting'
             console.log(chalk.yellow('🔄 Connecting to WhatsApp...'))
         }
         
         if (connection == "open") {
+            pairingConnectionState = 'open'
             console.log(chalk.magenta(` `))
             console.log(chalk.yellow(`🌿Connected to => ` + JSON.stringify(XeonBotInc.user, null, 2)))
 
@@ -368,6 +372,7 @@ pairingSocket = XeonBotInc
         }
         
         if (connection === 'close') {
+            pairingConnectionState = 'closed'
             const shouldReconnect = (lastDisconnect?.error)?.output?.statusCode !== DisconnectReason.loggedOut
             const statusCode = lastDisconnect?.error?.output?.statusCode
             
