@@ -17,6 +17,7 @@ const FileType = require('file-type')
 const path = require('path')
 const express = require('express')
 const axios = require('axios')
+const QRCode = require('qrcode')
 const { handleMessages, handleGroupParticipantUpdate, handleStatus } = require('./main');
 const PhoneNumber = require('awesome-phonenumber')
 const { imageToWebp, videoToWebp, writeExifImg, writeExifVid } = require('./lib/exif')
@@ -59,20 +60,58 @@ const app = express()
 const sitePort = process.env.PORT || 3000
 let pairingSocket = null
 let pairingConnectionState = 'unknown'
+let currentQr = null
 
 app.use(express.json())
 
 const renderHomePage = require('./renderPage')
+const renderQrPage = require('./renderQRPage')
 
 app.get('/', (req, res) => {
     res.setHeader('Content-Type', 'text/html;charset=UTF-8')
     res.send(renderHomePage())
 })
 
+app.get('/qr', (req, res) => {
+    res.setHeader('Content-Type', 'text/html;charset=UTF-8')
+    res.send(renderQrPage())
+})
+
 app.get('/status', (req, res) => {
     const registered = pairingSocket?.authState?.creds?.registered || false
     const user = pairingSocket?.user?.id || null
-    res.json({ connected: !!pairingSocket, registered, user, connectionState: pairingConnectionState })
+    res.json({ connected: !!pairingSocket, registered, user, connectionState: pairingConnectionState, qr: pairingConnectionState === 'qr' ? currentQr : null })
+})
+
+app.get('/qr-json', (req, res) => {
+    if (!currentQr || pairingConnectionState !== 'qr') {
+        return res.status(404).json({ error: 'QR not available' })
+    }
+
+    QRCode.toDataURL(currentQr, { margin: 1, scale: 6 }, (err, dataUrl) => {
+        if (err) {
+            console.error('QR generation failed:', err)
+            return res.status(500).json({ error: 'Failed to generate QR image' })
+        }
+        res.json({ qr: dataUrl })
+    })
+})
+
+app.get('/qr-image', async (req, res) => {
+    if (!currentQr || pairingConnectionState !== 'qr') {
+        return res.status(404).send('QR not available')
+    }
+
+    try {
+        const dataUrl = await QRCode.toDataURL(currentQr, { margin: 1, scale: 6 })
+        const base64Data = dataUrl.split(',')[1]
+        const img = Buffer.from(base64Data, 'base64')
+        res.setHeader('Content-Type', 'image/png')
+        res.send(img)
+    } catch (err) {
+        console.error('QR image generation failed:', err)
+        res.status(500).send('Failed to generate QR image')
+    }
 })
 
 app.get('/code', async (req, res) => {
@@ -85,7 +124,8 @@ app.get('/code', async (req, res) => {
             origin,
             number,
             socketReady: !!pairingSocket,
-            registered: pairingSocket?.authState?.creds?.registered
+            registered: pairingSocket?.authState?.creds?.registered,
+            connectionState: pairingConnectionState
         })
         if (!number) return res.status(400).json({ error: 'Missing or invalid number' })
         if (!pairingSocket) return res.status(503).json({ error: 'Bot is not ready yet' })
@@ -330,6 +370,7 @@ pairingSocket = XeonBotInc
         console.log(chalk.blue('connection.update event:'), JSON.stringify(s, null, 2))
         
         if (qr) {
+            currentQr = qr
             pairingConnectionState = 'qr'
             console.log(chalk.yellow('📱 QR Code generated. Please scan with WhatsApp.'))
         }
@@ -340,6 +381,7 @@ pairingSocket = XeonBotInc
         }
         
         if (connection == "open") {
+            currentQr = null
             pairingConnectionState = 'open'
             console.log(chalk.magenta(` `))
             console.log(chalk.yellow(`🌿Connected to => ` + JSON.stringify(XeonBotInc.user, null, 2)))
@@ -374,6 +416,7 @@ pairingSocket = XeonBotInc
         }
         
         if (connection === 'close') {
+            currentQr = null
             pairingConnectionState = 'closed'
             const shouldReconnect = (lastDisconnect?.error)?.output?.statusCode !== DisconnectReason.loggedOut
             const statusCode = lastDisconnect?.error?.output?.statusCode
