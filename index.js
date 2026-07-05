@@ -64,6 +64,7 @@ let currentQr = null
 let lastDisconnectInfo = null
 let reconnecting = false
 let reconnectAttempts = 0
+let lastPairing = null
 
 app.use(express.json())
 
@@ -83,7 +84,7 @@ app.get('/qr', (req, res) => {
 app.get('/status', (req, res) => {
     const registered = pairingSocket?.authState?.creds?.registered || false
     const user = pairingSocket?.user?.id || null
-    res.json({ connected: !!pairingSocket, registered, user, connectionState: pairingConnectionState, qr: pairingConnectionState === 'qr' ? currentQr : null, lastDisconnect: lastDisconnectInfo })
+    res.json({ connected: !!pairingSocket, registered, user, connectionState: pairingConnectionState, qr: pairingConnectionState === 'qr' ? currentQr : null, lastDisconnect: lastDisconnectInfo, lastPairing })
 })
 
 app.get('/qr-json', (req, res) => {
@@ -162,6 +163,10 @@ app.get('/code', async (req, res) => {
         const codeResult = await pairingSocket[pairingMethodName](number)
         const code = typeof codeResult === 'string' ? codeResult : codeResult?.code || codeResult?.pairingCode || JSON.stringify(codeResult)
         console.log('PAIRING CODE GENERATED for', number, '=>', code)
+        // persist last pairing for UI
+        try {
+            lastPairing = { number, code, ts: Date.now() }
+        } catch (e) { console.error('Failed to persist lastPairing', e) }
         console.log('NOTE: Code affiché dans le terminal, la page web est volontairement minimale.')
         return res.json({ code })
     } catch (error) {
