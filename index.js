@@ -61,6 +61,9 @@ const sitePort = process.env.PORT || 3000
 let pairingSocket = null
 let pairingConnectionState = 'unknown'
 let currentQr = null
+let lastDisconnectInfo = null
+let reconnecting = false
+let reconnectAttempts = 0
 
 app.use(express.json())
 
@@ -80,7 +83,7 @@ app.get('/qr', (req, res) => {
 app.get('/status', (req, res) => {
     const registered = pairingSocket?.authState?.creds?.registered || false
     const user = pairingSocket?.user?.id || null
-    res.json({ connected: !!pairingSocket, registered, user, connectionState: pairingConnectionState, qr: pairingConnectionState === 'qr' ? currentQr : null })
+    res.json({ connected: !!pairingSocket, registered, user, connectionState: pairingConnectionState, qr: pairingConnectionState === 'qr' ? currentQr : null, lastDisconnect: lastDisconnectInfo })
 })
 
 app.get('/qr-json', (req, res) => {
@@ -193,7 +196,7 @@ let owner = JSON.parse(fs.readFileSync('./data/owner.json'))
 
 global.botname = "KNIGHT BOT"
 global.themeemoji = "•"
-const pairingCode = process.argv.includes("--pairing-code") || process.env.PAIRING_CODE !== 'false'
+const pairingCode = process.argv.includes("--pairing-code") || process.env.PAIRING_CODE === 'true'
 const useMobile = process.argv.includes("--mobile")
 
 // Only create readline interface if we're in an interactive environment
@@ -376,12 +379,15 @@ pairingSocket = XeonBotInc
         }
         
         if (connection === 'connecting') {
-            pairingConnectionState = 'connecting'
+            pairingConnectionState = reconnecting ? 'reconnecting' : 'connecting'
             console.log(chalk.yellow('🔄 Connecting to WhatsApp...'))
         }
         
         if (connection == "open") {
             currentQr = null
+            reconnecting = false
+            reconnectAttempts = 0
+            lastDisconnectInfo = null
             pairingConnectionState = 'open'
             console.log(chalk.magenta(` `))
             console.log(chalk.yellow(`🌿Connected to => ` + JSON.stringify(XeonBotInc.user, null, 2)))
@@ -417,12 +423,19 @@ pairingSocket = XeonBotInc
         
         if (connection === 'close') {
             currentQr = null
-            pairingConnectionState = 'closed'
-            const shouldReconnect = (lastDisconnect?.error)?.output?.statusCode !== DisconnectReason.loggedOut
+            lastDisconnectInfo = lastDisconnect || lastDisconnectInfo
             const statusCode = lastDisconnect?.error?.output?.statusCode
-            
-            console.log(chalk.red(`Connection closed due to ${lastDisconnect?.error}, reconnecting ${shouldReconnect}`))
-            
+            const errorReason = lastDisconnect?.error?.toString() || JSON.stringify(lastDisconnect)
+            const shouldReconnect = statusCode !== DisconnectReason.loggedOut
+
+            if (shouldReconnect) {
+                pairingConnectionState = 'reconnecting'
+                console.log(chalk.yellow(`Connection closed due to ${errorReason}, reconnecting...`))
+            } else {
+                pairingConnectionState = 'loggedOut'
+                console.log(chalk.red(`Session logged out due to ${errorReason}. Manual re-authentication required.`))
+            }
+
             if (statusCode === DisconnectReason.loggedOut || statusCode === 401) {
                 try {
                     rmSync('./session', { recursive: true, force: true })
@@ -430,13 +443,14 @@ pairingSocket = XeonBotInc
                 } catch (error) {
                     console.error('Error deleting session:', error)
                 }
-                console.log(chalk.red('Session logged out. Please re-authenticate.'))
             }
-            
-            if (shouldReconnect) {
+
+            if (shouldReconnect && !reconnecting) {
+                reconnecting = true
                 console.log(chalk.yellow('Reconnecting...'))
                 await delay(5000)
-                startXeonBotInc()
+                reconnecting = false
+                await startXeonBotInc()
             }
         }
     })
